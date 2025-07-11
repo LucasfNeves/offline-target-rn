@@ -1,8 +1,10 @@
 import { Button } from "@/components/Button";
 import { HomeHeader } from "@/components/HomeHeader";
 import { List } from "@/components/List";
-import { Target } from "@/components/Target";
+import { Loading } from "@/components/Loading";
+import { Target, TargetProps } from "@/components/Target";
 import { useTargetDatabase } from "@/database/useTargetDatabase";
+import { numberToCurrency } from "@/utils/numberToCurrency";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { Alert, StatusBar, View } from "react-native";
@@ -14,24 +16,46 @@ const summary = {
 };
 
 export default function Index() {
-  const [targets, setTargets] = useState([]);
+  const [targets, setTargets] = useState<TargetProps[]>([]);
   const targetDatabase = useTargetDatabase();
+  const [fetching, setFetching] = useState(true);
 
-  async function fetchTargets() {
+  async function fetchTargets(): Promise<TargetProps[]> {
     try {
       const response = await targetDatabase.listBySavedValue();
-      setTargets(response);
-      console.log("Targets fetched:", JSON.stringify(response));
+      
+      return response.map((item) => ({
+        id: String(item.id),
+        name: item.name,
+        percentage: item.percentage.toFixed(0) + "%",
+        current: numberToCurrency(item.current),
+        target: numberToCurrency(item.amount),
+      }));
     } catch (error) {
       Alert.alert("Erro", "Não foi possível carregar as metas.");
       console.error("Error fetching targets:", error);
     }
   }
 
+  async function fetchData() {
+    const targetsDataPromise =  fetchTargets();
+
+    const [targetsData] = await Promise.all([targetsDataPromise]);
+
+    setTargets(targetsData || []);
+    setFetching(false);
+  }
+
   // O useFocusEffect é usado para executar uma função quando a tela ganha foco
-  useFocusEffect(useCallback(() => {
-    fetchTargets();
-  }, []));
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [])
+  );
+
+  if (fetching) {
+    return <Loading />;
+  }
 
   return (
     <View style={{ flex: 1 }}>
